@@ -42,8 +42,6 @@ pub async fn start_background_processor<F, R, E>(
         let mut last_flush = Instant::now();
         // Count consecutive errors during flushing
         let mut consecutive_errors = 0;
-        // Track the time the last record was received (for inactivity flush)
-        let mut last_record = Instant::now();
 
         // Spawn a simple timer task to trigger inactivity checks periodically
         let (inactivity_tx, mut inactivity_rx) = mpsc::channel::<()>(1);
@@ -66,7 +64,11 @@ pub async fn start_background_processor<F, R, E>(
             // Pre-check: If buffer is completely full, force a flush immediately
             // This prevents the select! from potentially adding another record and exceeding capacity
             if buffer.len() >= flush_config.batch_size {
-                warn!(buffer_len = buffer.len(), batch_size = flush_config.batch_size, "Buffer full, forced flush");
+                debug!(
+                    buffer_len = buffer.len(),
+                    batch_size = flush_config.batch_size,
+                    "Buffer full, forced flush"
+                );
                 if !skip_upload {
                     flush_records(
                         &client,
@@ -87,28 +89,8 @@ pub async fn start_background_processor<F, R, E>(
                         Some(record) => {
                             // Add the record to the buffer
                             buffer.push_back(record);
-                            // Update the time of the last received record
-                            last_record = Instant::now();
                             let buffer_len = buffer.len();
                             debug!(buffer_len, "Record added to buffer");
-
-                            // Check if the buffer has reached half the batch size threshold
-                            let should_flush = buffer_len >= flush_config.batch_size / 2;
-                            let flush_reason = if should_flush { "batch size threshold" } else { "" };
-
-                            // If threshold met, flush the current buffer
-                            if should_flush {
-                                debug!(buffer_len, reason = flush_reason, elapsed_ms = last_flush.elapsed().as_millis(), "Flush condition met (size check)");
-                                if !skip_upload {
-                                    flush_records(
-                                        &client,
-                                        &mut buffer,
-                                        &mut consecutive_errors,
-                                        &mut last_flush,
-                                        table_name.clone(),
-                                    ).await;
-                                }
-                            }
                         }
                         // Branch 1.1: The input channel was closed
                         None => {
@@ -127,8 +109,8 @@ pub async fn start_background_processor<F, R, E>(
                     let buffer_len = buffer.len();
                     // Check if the flush interval has passed since the last record was received
                     // and if the buffer is not empty
-                    if last_record.elapsed() >= flush_config.flush_interval && buffer_len > 0 && !skip_upload {
-                        info!(buffer_len, elapsed_ms = last_record.elapsed().as_millis(), "Flushing due to inactivity");
+                    if last_flush.elapsed() >= flush_config.flush_interval && buffer_len > 0 && !skip_upload {
+                        debug!(buffer_len, elapsed_since_last_flush_ms = last_flush.elapsed().as_millis(), "Flushing due to interval"); 
                         // Flush the buffer due to inactivity
                         flush_records(
                             &client,
@@ -141,7 +123,9 @@ pub async fn start_background_processor<F, R, E>(
                 }
             }
         }
-    }.instrument(processor_span).await // Apply the tracing span to the entire async block
+    }
+    .instrument(processor_span)
+    .await // Apply the tracing span to the entire async block
 }
 
 // Function to flush a batch of records to ClickHouse with retry logic
@@ -170,7 +154,7 @@ async fn flush_records<F, R, E>(
     let max_retries = 3; // Maximum number of retries for flushing
     let mut retry_count = 0;
 
-    info!(num_records, "Attempting to flush batch");
+    // info!(num_records, "Attempting to flush batch");
 
     // Retry loop
     loop {

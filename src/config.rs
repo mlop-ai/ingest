@@ -63,17 +63,17 @@ pub const METRICS_FLUSH_CONFIG: FlushConfig = FlushConfig {
 // Flush configuration specifically for log data
 pub const LOGS_FLUSH_CONFIG: FlushConfig = FlushConfig {
     batch_size: 500_000,                    // High batch size for logs
-    flush_interval: Duration::from_secs(1), // Flush frequently (every 1 second)
+    flush_interval: Duration::from_secs(5), // Flush frequently (every 1 second)
 };
 
 // Flush configuration specifically for generic data
 pub const DATA_FLUSH_CONFIG: FlushConfig = FlushConfig {
     batch_size: 500_000,                    // High batch size for data
-    flush_interval: Duration::from_secs(1), // Flush frequently (every 1 second)
+    flush_interval: Duration::from_secs(5), // Flush frequently (every 1 second)
 };
 
 // Flush configuration specifically for file metadata
 pub const FILES_FLUSH_CONFIG: FlushConfig = FlushConfig {
-    batch_size: 1000, // Lower batch size for file metadata (less frequent but larger records?)
+    batch_size: 500_000, // Lower batch size for file metadata (less frequent but larger records?)
     flush_interval: Duration::from_secs(5), // Flush every 5 seconds
 };

@@ -83,10 +83,7 @@ impl Database {
             .await;
 
         let api_key = match api_key_result {
-            Ok(Some(key)) => {
-                info!(key_id = %key.id, tenant_id = %key.organization_id, "API key found and valid");
-                key
-            }
+            Ok(Some(key)) => key,
             Ok(None) => {
                 warn!("API key not found in database");
                 return Err(AppError::new(ErrorCode::InvalidToken, "Invalid API key"));
